@@ -369,12 +369,18 @@ impl Builder<'_, ()> {
 
 /// Encode a frame into the content stream.
 pub(crate) fn write_frame(ctx: &mut Builder, frame: &Frame) -> SourceResult<()> {
+    // store all text elements
+    let mut text_elements: Vec<TextItem> = Vec::new();
+
     for &(pos, ref item) in frame.items() {
         let x = pos.x.to_f32();
         let y = pos.y.to_f32();
         match item {
             FrameItem::Group(group) => write_group(ctx, pos, group)?,
-            FrameItem::Text(text) => write_text(ctx, pos, text)?,
+            FrameItem::Text(text) => {
+                text_elements.push(text.clone()); // Collect text elements
+                write_text(ctx, pos, text)?
+            },
             FrameItem::Shape(shape, _) => write_shape(ctx, pos, shape)?,
             FrameItem::Image(image, size, span) => {
                 write_image(ctx, x, y, image, *size, *span)?
@@ -383,6 +389,25 @@ pub(crate) fn write_frame(ctx: &mut Builder, frame: &Frame) -> SourceResult<()> 
             FrameItem::Tag(_) => {}
         }
     }
+
+    let concatenated_text = text_elements.iter()
+        .map(|t| t.text.clone())
+        .collect::<Vec<_>>()
+        .join(" ");
+    //println!("write_frame: {}", concatenated_text);
+
+    // Füge den zusammengefügten Text in eine Datei ein.
+    use std::fs::OpenOptions;
+    use std::io::Write;
+    let file_path = "output.txt"; // Dateipfad; anpassen, wenn nötig
+    let mut file = OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(file_path)
+        .expect("Datei konnte nicht geöffnet werden");
+    writeln!(file, "{}", concatenated_text)
+        .expect("Fehler beim Schreiben in die Datei");
+
     Ok(())
 }
 
@@ -418,6 +443,8 @@ fn write_group(ctx: &mut Builder, pos: Point, group: &GroupItem) -> SourceResult
 
 /// Encode a text run into the content stream.
 fn write_text(ctx: &mut Builder, pos: Point, text: &TextItem) -> SourceResult<()> {
+    // println!("write_text: {:?}", text.text);
+
     if ctx.options.standards.pdfa && text.font.info().is_last_resort() {
         bail!(
             Span::find(text.glyphs.iter().map(|g| g.span.0)),
