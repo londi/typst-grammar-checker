@@ -26,3 +26,7 @@ package-lock.json
 # Nix
 /result
 .direnv/
+
+/test-document
+*.typ
+*.pdf
